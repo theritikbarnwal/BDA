@@ -6,6 +6,7 @@ jps
 hdfs namemdoe -format
 
 mkdir hadoop_lab
+cd hadoop_lab
 
 nano temperature.txt
 
