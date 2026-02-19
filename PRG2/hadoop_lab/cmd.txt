@@ -1,0 +1,32 @@
+start-dfs.sh
+start-yarn.sh
+jps
+
+#if no namemdoe:
+hdfs namemdoe -format
+
+mkdir hadoop_lab
+
+hdfs dfs -mkdir -p /wordfreq/input
+
+nano input.txt
+
+hadoop is big data framework
+hadoop processes big data
+big data is powerful
+Save and exit.
+
+hdfs dfs -put input.txt /wordfreq/input
+hdfs dfs -ls /wordfreq/input
+
+nano WordCount.java
+
+javac -classpath $(hadoop classpath) -d . WordCount.java
+ls
+
+jar -cvf wordcount.jar WordCount*.class
+
+hdfs dfs -rm -r /wordfreq/output
+hadoop jar wordcount.jar WordCount /wordfreq/input /wordfreq/output
+
+hdfs dfs -cat /wordfreq/output/part-r-00000
