@@ -1,0 +1,35 @@
+
+Start-dfs.sh
+Start-yarn.sh
+jps
+
+mkdir matrix_lab
+cd matrix_lab
+
+nano MatrixMultiply.java
+
+javac -classpath $(hadoop classpath) -d . MatrixMultiply.java
+
+jar -cvf matrix.jar *
+
+
+hdfs dfs -mkdir -p /matrix/input
+
+nano matrix.txt
+
+A,0,0,1
+A,0,1,2
+A,1,0,3
+A,1,1,4
+B,0,0,5
+B,0,1,6
+B,1,0,7
+B,1,1,8
+
+hdfs dfs -put matrix.txt /matrix/input
+
+hdfs dfs -ls /matrix/input
+
+hadoop jar matrix.jar MatrixMultiply /matrix/input /matrix/output
+
+hdfs dfs -cat /matrix/output/part-r-00000
