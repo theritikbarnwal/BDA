@@ -1,10 +1,10 @@
 import java.io.IOException;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
@@ -16,53 +16,55 @@ public class GradeMR {
         private Text name = new Text();
         private Text grade = new Text();
 
-        @Override
-        protected void map(Object key, Text value, Context context)
+        public void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
 
-            String line = value.toString().trim();
-            if (line.isEmpty()) return;
+            String[] parts = value.toString().split(",");
 
-            String[] parts = line.split(",");
             if (parts.length != 2) return;
 
-            int marks;
-            try {
-                marks = Integer.parseInt(parts[1].trim());
-            } catch (NumberFormatException e) {
-                return;
-            }
+            String student = parts[0].trim();
+            int marks = Integer.parseInt(parts[1].trim());
 
-            if (marks < 0 || marks > 100) return;
+            String result;
 
-            name.set(parts[0].trim());
+            if (marks >= 80) result = "A";
+            else if (marks >= 60) result = "B";
+            else result = "C";
 
-            if (marks >= 80) grade.set("A");
-            else if (marks >= 60) grade.set("B");
-            else if (marks >= 50) grade.set("C");
-            else grade.set("D");
+            name.set(student);
+            grade.set(result);
 
             context.write(name, grade);
         }
     }
 
-    public static void main(String[] args) throws Exception {
+    public static class GradeReducer
+            extends Reducer<Text, Text, Text, Text> {
 
-        if (args.length != 2) {
-            System.err.println("Usage: GradeMR <input> <output>");
-            System.exit(-1);
+        public void reduce(Text key, Iterable<Text> values, Context context)
+                throws IOException, InterruptedException {
+
+            for (Text val : values) {
+                context.write(key, val);
+            }
         }
+    }
+
+    public static void main(String[] args) throws Exception {
 
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Student Grade");
 
         job.setJarByClass(GradeMR.class);
-        job.setMapperClass(GradeMapper.class);
 
-        job.setNumReduceTasks(0);  // Map-only job
+        job.setMapperClass(GradeMapper.class);
+        job.setReducerClass(GradeReducer.class);
 
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
+
+        job.setNumReduceTasks(1);   // IMPORTANT
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
