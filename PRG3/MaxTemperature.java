@@ -1,4 +1,5 @@
 import java.io.IOException;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.*;
@@ -11,40 +12,67 @@ public class MaxTemperature {
     public static class TempMapper
             extends Mapper<Object, Text, Text, IntWritable> {
 
-        private final Text year = new Text();
-        private final IntWritable temperature = new IntWritable();
+        private Text year = new Text();
+        private IntWritable temperature = new IntWritable();
 
-        public void map(Object key, Text value, Context context)
+        @Override
+        protected void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
 
-            String[] parts = value.toString().split(",");
-            year.set(parts[0]);
-            temperature.set(Integer.parseInt(parts[1]));
-            context.write(year, temperature);
+            String line = value.toString().trim();
+            if (line.isEmpty()) return;
+
+            String[] parts = line.split(",");
+
+            if (parts.length != 2) return;  // defensive check
+
+            try {
+                year.set(parts[0].trim());
+                temperature.set(Integer.parseInt(parts[1].trim()));
+                context.write(year, temperature);
+            } catch (NumberFormatException e) {
+                // skip bad records
+            }
         }
     }
 
     public static class TempReducer
             extends Reducer<Text, IntWritable, Text, IntWritable> {
 
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
+        private IntWritable result = new IntWritable();
+
+        @Override
+        protected void reduce(Text key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {
 
             int max = Integer.MIN_VALUE;
-            for (IntWritable val : values)
-                max = Math.max(max, val.get());
 
-            context.write(key, new IntWritable(max));
+            for (IntWritable val : values) {
+                max = Math.max(max, val.get());
+            }
+
+            result.set(max);
+            context.write(key, result);
         }
     }
 
     public static void main(String[] args) throws Exception {
 
-        Job job = Job.getInstance(new Configuration(), "Max Temperature");
+        if (args.length != 2) {
+            System.err.println("Usage: MaxTemperature <input> <output>");
+            System.exit(-1);
+        }
+
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Max Temperature");
+
         job.setJarByClass(MaxTemperature.class);
 
         job.setMapperClass(TempMapper.class);
         job.setReducerClass(TempReducer.class);
+
+        // Important for performance
+        job.setCombinerClass(TempReducer.class);
 
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);

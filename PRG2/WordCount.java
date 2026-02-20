@@ -14,36 +14,57 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 public class WordCount {
 
     public static class MapperClass extends Mapper<Object, Text, Text, IntWritable> {
-        private final static IntWritable one = new IntWritable(1);
+
+        private static final IntWritable ONE = new IntWritable(1);
         private Text word = new Text();
 
-        public void map(Object key, Text value, Context context)
+        @Override
+        protected void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
+
             StringTokenizer itr = new StringTokenizer(value.toString());
+
             while (itr.hasMoreTokens()) {
                 word.set(itr.nextToken());
-                context.write(word, one);
+                context.write(word, ONE);
             }
         }
     }
 
     public static class ReducerClass extends Reducer<Text, IntWritable, Text, IntWritable> {
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
+
+        private IntWritable result = new IntWritable();
+
+        @Override
+        protected void reduce(Text key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {
+
             int sum = 0;
-            for (IntWritable val : values)
+
+            for (IntWritable val : values) {
                 sum += val.get();
-            context.write(key, new IntWritable(sum));
+            }
+
+            result.set(sum);
+            context.write(key, result);
         }
     }
 
     public static void main(String[] args) throws Exception {
+
+        if (args.length != 2) {
+            System.err.println("Usage: WordCount <input path> <output path>");
+            System.exit(-1);
+        }
+
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "WordCount");
 
         job.setJarByClass(WordCount.class);
+
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
+
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);
 

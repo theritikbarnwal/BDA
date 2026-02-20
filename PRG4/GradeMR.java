@@ -1,4 +1,5 @@
 import java.io.IOException;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -12,22 +13,27 @@ public class GradeMR {
     public static class GradeMapper
             extends Mapper<Object, Text, Text, Text> {
 
-        private final Text name = new Text();
-        private final Text grade = new Text();
+        private Text name = new Text();
+        private Text grade = new Text();
 
-        public void map(Object key, Text value, Context context)
+        @Override
+        protected void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
 
-            String[] parts = value.toString().split(",");
+            String line = value.toString().trim();
+            if (line.isEmpty()) return;
 
-            if (parts.length != 2) return; // avoid crash
+            String[] parts = line.split(",");
+            if (parts.length != 2) return;
 
             int marks;
             try {
                 marks = Integer.parseInt(parts[1].trim());
             } catch (NumberFormatException e) {
-                return; // skip bad record
+                return;
             }
+
+            if (marks < 0 || marks > 100) return;
 
             name.set(parts[0].trim());
 
@@ -42,12 +48,18 @@ public class GradeMR {
 
     public static void main(String[] args) throws Exception {
 
-        Job job = Job.getInstance(new Configuration(), "Student Grade");
-        job.setJarByClass(GradeMR.class);
+        if (args.length != 2) {
+            System.err.println("Usage: GradeMR <input> <output>");
+            System.exit(-1);
+        }
 
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Student Grade");
+
+        job.setJarByClass(GradeMR.class);
         job.setMapperClass(GradeMapper.class);
 
-        job.setNumReduceTasks(0); // IMPORTANT
+        job.setNumReduceTasks(0);  // Map-only job
 
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);

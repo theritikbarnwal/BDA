@@ -19,37 +19,51 @@ public class MatrixMultiply {
         private int rowsA;
         private int colsB;
 
+        private Text outputKey = new Text();
+        private Text outputValue = new Text();
+
         @Override
         protected void setup(Context context) {
             Configuration conf = context.getConfiguration();
-            rowsA = conf.getInt("rowsA", 1);
-            colsB = conf.getInt("colsB", 1);
+            rowsA = conf.getInt("rowsA", -1);
+            colsB = conf.getInt("colsB", -1);
         }
 
-        public void map(Object key, Text value, Context context)
+        @Override
+        protected void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
 
-            String[] parts = value.toString().split(",");
+            String line = value.toString().trim();
+            if (line.isEmpty()) return;
+
+            String[] parts = line.split(",");
             if (parts.length != 4) return;
 
-            String matrix = parts[0];
-            int row = Integer.parseInt(parts[1]);
-            int col = Integer.parseInt(parts[2]);
-            String val = parts[3];
+            String matrix = parts[0].trim();
+
+            int row, col, val;
+            try {
+                row = Integer.parseInt(parts[1].trim());
+                col = Integer.parseInt(parts[2].trim());
+                val = Integer.parseInt(parts[3].trim());
+            } catch (NumberFormatException e) {
+                return; // skip invalid records
+            }
 
             if (matrix.equals("A")) {
+
                 for (int j = 0; j < colsB; j++) {
-                    context.write(
-                        new Text(row + "," + j),
-                        new Text("A," + col + "," + val)
-                    );
+                    outputKey.set(row + "," + j);
+                    outputValue.set("A," + col + "," + val);
+                    context.write(outputKey, outputValue);
                 }
+
             } else if (matrix.equals("B")) {
+
                 for (int i = 0; i < rowsA; i++) {
-                    context.write(
-                        new Text(i + "," + col),
-                        new Text("B," + row + "," + val)
-                    );
+                    outputKey.set(i + "," + col);
+                    outputValue.set("B," + row + "," + val);
+                    context.write(outputKey, outputValue);
                 }
             }
         }
@@ -58,38 +72,48 @@ public class MatrixMultiply {
     public static class MatrixReducer
             extends Reducer<Text, Text, Text, Text> {
 
-        public void reduce(Text key, Iterable<Text> values, Context context)
+        private Text result = new Text();
+
+        @Override
+        protected void reduce(Text key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
 
             Map<Integer, Integer> mapA = new HashMap<>();
             Map<Integer, Integer> mapB = new HashMap<>();
 
             for (Text val : values) {
-                String[] parts = val.toString().split(",");
 
-                if (parts[0].equals("A")) {
-                    mapA.put(
-                        Integer.parseInt(parts[1]),
-                        Integer.parseInt(parts[2])
-                    );
-                } else {
-                    mapB.put(
-                        Integer.parseInt(parts[1]),
-                        Integer.parseInt(parts[2])
-                    );
+                String[] parts = val.toString().split(",");
+                if (parts.length != 3) continue;
+
+                String matrix = parts[0];
+
+                try {
+                    int index = Integer.parseInt(parts[1]);
+                    int number = Integer.parseInt(parts[2]);
+
+                    if (matrix.equals("A")) {
+                        mapA.put(index, number);
+                    } else if (matrix.equals("B")) {
+                        mapB.put(index, number);
+                    }
+
+                } catch (NumberFormatException e) {
+                    // skip bad data
                 }
             }
 
-            int result = 0;
+            int sum = 0;
 
             for (Map.Entry<Integer, Integer> entry : mapA.entrySet()) {
                 int k = entry.getKey();
                 if (mapB.containsKey(k)) {
-                    result += entry.getValue() * mapB.get(k);
+                    sum += entry.getValue() * mapB.get(k);
                 }
             }
 
-            context.write(key, new Text(String.valueOf(result)));
+            result.set(String.valueOf(sum));
+            context.write(key, result);
         }
     }
 
@@ -97,16 +121,28 @@ public class MatrixMultiply {
 
         if (args.length != 4) {
             System.err.println("Usage: MatrixMultiply <input> <output> <rowsA> <colsB>");
-            System.exit(2);
+            System.exit(-1);
+        }
+
+        int rowsA, colsB;
+
+        try {
+            rowsA = Integer.parseInt(args[2]);
+            colsB = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            System.err.println("rowsA and colsB must be integers.");
+            System.exit(-1);
+            return;
         }
 
         Configuration conf = new Configuration();
-        conf.setInt("rowsA", Integer.parseInt(args[2]));
-        conf.setInt("colsB", Integer.parseInt(args[3]));
+        conf.setInt("rowsA", rowsA);
+        conf.setInt("colsB", colsB);
 
         Job job = Job.getInstance(conf, "Matrix Multiplication");
 
         job.setJarByClass(MatrixMultiply.class);
+
         job.setMapperClass(MatrixMapper.class);
         job.setReducerClass(MatrixReducer.class);
 
