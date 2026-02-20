@@ -10,8 +10,7 @@ nano MatrixMultiply.java
 
 javac -classpath $(hadoop classpath) -d . MatrixMultiply.java
 
-jar -cvf matrix.jar *
-
+jar -cvf matrix.jar *.class
 
 hdfs dfs -mkdir -p /matrix/input
 
